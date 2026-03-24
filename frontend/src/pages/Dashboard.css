@@ -1,0 +1,127 @@
+.dashboard-page .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-md);
+}
+
+.dashboard-page .card-header h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.dashboard-page .card-body {
+  overflow-x: auto;
+}
+
+/* Signal List */
+.signal-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.signal-item {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: var(--spacing-sm);
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-secondary);
+  transition: all var(--transition-fast);
+  align-items: center;
+}
+
+.signal-item:hover {
+  border-color: var(--border-hover);
+}
+
+.signal-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.signal-prices {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.signal-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.signal-time {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Market Overview */
+.market-section {
+  padding: var(--spacing-sm) 0;
+}
+
+.market-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 0.85rem;
+}
+
+.market-divider {
+  height: 1px;
+  background: var(--border-secondary);
+  margin: var(--spacing-md) 0;
+}
+
+/* Status Grid */
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+.status-card {
+  padding: var(--spacing-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-secondary);
+}
+
+.status-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: 6px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.status-detail {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+/* Top/Worst Pairs */
+.pair-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pair-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}

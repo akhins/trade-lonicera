@@ -1,0 +1,7 @@
+.analytics-page .stats-grid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.analytics-page .stat-card .stat-value {
+  font-size: 1.5rem;
+}
