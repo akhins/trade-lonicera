@@ -28,8 +28,10 @@ const server = http.createServer(app);
 // Socket.IO - Dynamic CORS configuration
 const getCorsOrigins = () => {
   if (process.env.NODE_ENV === 'production') {
-    // Production: use environment variable or default domain
-    return process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : ['https://yourdomain.com'];
+    // Production: use environment variable or default domains
+    const envOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [];
+    const defaultOrigins = ['https://lonicera.netlify.app', 'https://yourdomain.com'];
+    return envOrigins.length > 0 ? envOrigins : defaultOrigins;
   }
   // Development: allow localhost on different ports
   return ['http://localhost:3001', 'http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:5173'];
