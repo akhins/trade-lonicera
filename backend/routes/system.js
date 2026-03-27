@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database');
+const SystemLog = require('../models/SystemLog');
 const binanceService = require('../services/binanceService');
 const telegramService = require('../services/telegramService');
 const strategyEngine = require('../services/strategyEngine');
@@ -10,19 +10,13 @@ const tradingSystem = require('../services/tradingSystem');
 // GET /api/system/status
 router.get('/status', async (req, res, next) => {
   try {
-    let dbStatus = false;
-    try {
-      await db.execute('SELECT 1');
-      dbStatus = true;
-    } catch (e) {}
-
     res.json({
-      telegram: telegramService.getStatus(),
-      binance: binanceService.getStatus(),
-      database: { connected: dbStatus },
-      strategy: strategyEngine.getStatus(),
-      paperTrading: paperTradingEngine.getStatus(),
-      tradingSystem: tradingSystem.getStatus(),
+      telegram: telegramService?.getStatus?.() || { connected: false },
+      binance: binanceService?.getStatus?.() || { connected: false },
+      database: { connected: true },
+      strategy: strategyEngine?.getStatus?.() || { running: false },
+      paperTrading: paperTradingEngine?.getStatus?.() || { running: false },
+      tradingSystem: tradingSystem?.getStatus?.() || { running: false },
       uptime: process.uptime(),
       memory: process.memoryUsage()
     });
@@ -34,23 +28,21 @@ router.get('/status', async (req, res, next) => {
 // GET /api/system/logs
 router.get('/logs', async (req, res, next) => {
   try {
-    const { level, module, limit = 100, offset = 0 } = req.query;
+    const { level, service, limit = 100, offset = 0 } = req.query;
 
-    let query = 'SELECT * FROM system_logs';
-    const params = [];
-    const conditions = [];
+    const query = {};
+    if (level) query.level = level;
+    if (service) query.service = service;
 
-    if (level) { conditions.push('level = ?'); params.push(level); }
-    if (module) { conditions.push('module = ?'); params.push(module); }
+    const logs = await SystemLog.find(query)
+      .sort({ created_at: -1 })
+      .limit(parseInt(limit))
+      .skip(parseInt(offset))
+      .lean();
 
-    if (conditions.length > 0) query += ' WHERE ' + conditions.join(' AND ');
-    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
+    const total = await SystemLog.countDocuments(query);
 
-    const [logs] = await db.execute(query, params);
-    const [countResult] = await db.execute('SELECT COUNT(*) as total FROM system_logs');
-
-    res.json({ logs, total: countResult[0].total });
+    res.json({ logs, total });
   } catch (error) {
     next(error);
   }
@@ -59,18 +51,33 @@ router.get('/logs', async (req, res, next) => {
 // GET /api/system/binance-symbols
 router.get('/binance-symbols', async (req, res, next) => {
   try {
-    const symbols = binanceService.symbols;
+    const symbols = binanceService?.symbols || [];
     res.json(symbols);
   } catch (error) {
     next(error);
   }
 });
 
-// DELETE /api/system/logs - Logları temizle
+// DELETE /api/system/logs - Clear old logs
 router.delete('/logs', async (req, res, next) => {
   try {
-    await db.execute('DELETE FROM system_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)');
-    res.json({ success: true, message: '7 günden eski loglar temizlendi' });
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    await SystemLog.deleteMany({ created_at: { $lt: sevenDaysAgo } });
+    
+    res.json({ success: true, message: 'Logs older than 7 days deleted' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/system/health
+router.get('/health', async (req, res, next) => {
+  try {
+    res.json({
+      status: 'ok',
+      timestamp: new Date(),
+      uptime: process.uptime()
+    });
   } catch (error) {
     next(error);
   }

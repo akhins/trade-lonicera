@@ -1,26 +1,36 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database');
+const Trade = require('../models/Trade');
 
 // GET /api/analytics/performance
 router.get('/performance', async (req, res, next) => {
   try {
-    const { period = '30' } = req.query; // days
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    // Günlük performans
-    const [daily] = await db.execute(
-      `SELECT DATE(close_time) as date,
-              COUNT(*) as trade_count,
-              SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as wins,
-              SUM(CASE WHEN pnl <= 0 THEN 1 ELSE 0 END) as losses,
-              SUM(pnl) as total_pnl,
-              AVG(pnl) as avg_pnl,
-              AVG(pnl_percent) as avg_pnl_percent
-       FROM trades 
-       WHERE status = 'CLOSED' AND close_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-       GROUP BY DATE(close_time) ORDER BY date ASC`,
-      [parseInt(period)]
-    );
+    const { period = 30 } = req.query;
+    const dateFrom = new Date(Date.now() - parseInt(period) * 24 * 60 * 60 * 1000);
+
+    const daily = await Trade.aggregate([
+      {
+        $match: {
+          user_id: userId,
+          status: 'closed',
+          closed_at: { $gte: dateFrom }
+        }
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$closed_at' } },
+          trade_count: { $sum: 1 },
+          wins: { $sum: { $cond: [{ $gt: ['$pnl', 0] }, 1, 0] } },
+          losses: { $sum: { $cond: [{ $lte: ['$pnl', 0] }, 1, 0] } },
+          total_pnl: { $sum: '$pnl' },
+          avg_pnl: { $avg: '$pnl' }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
 
     res.json(daily);
   } catch (error) {
@@ -31,19 +41,25 @@ router.get('/performance', async (req, res, next) => {
 // GET /api/analytics/symbols
 router.get('/symbols', async (req, res, next) => {
   try {
-    const [symbolStats] = await db.execute(
-      `SELECT symbol,
-              COUNT(*) as total_trades,
-              SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as wins,
-              SUM(CASE WHEN pnl <= 0 THEN 1 ELSE 0 END) as losses,
-              SUM(pnl) as total_pnl,
-              AVG(pnl_percent) as avg_pnl_percent,
-              MAX(pnl) as best_trade,
-              MIN(pnl) as worst_trade,
-              AVG(TIMESTAMPDIFF(MINUTE, open_time, close_time)) as avg_duration_min
-       FROM trades WHERE status = 'CLOSED'
-       GROUP BY symbol ORDER BY total_pnl DESC`
-    );
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const symbolStats = await Trade.aggregate([
+      { $match: { user_id: userId, status: 'closed' } },
+      {
+        $group: {
+          _id: '$symbol',
+          total_trades: { $sum: 1 },
+          wins: { $sum: { $cond: [{ $gt: ['$pnl', 0] }, 1, 0] } },
+          losses: { $sum: { $cond: [{ $lte: ['$pnl', 0] }, 1, 0] } },
+          total_pnl: { $sum: '$pnl' },
+          avg_pnl_percent: { $avg: '$pnl_percentage' },
+          best_trade: { $max: '$pnl' },
+          worst_trade: { $min: '$pnl' }
+        }
+      },
+      { $sort: { total_pnl: -1 } }
+    ]);
 
     res.json(symbolStats);
   } catch (error) {
@@ -54,19 +70,32 @@ router.get('/symbols', async (req, res, next) => {
 // GET /api/analytics/direction
 router.get('/direction', async (req, res, next) => {
   try {
-    const [dirStats] = await db.execute(
-      `SELECT direction,
-              COUNT(*) as total_trades,
-              SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as wins,
-              SUM(CASE WHEN pnl <= 0 THEN 1 ELSE 0 END) as losses,
-              ROUND(SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) / COUNT(*) * 100, 2) as win_rate,
-              SUM(pnl) as total_pnl,
-              AVG(pnl_percent) as avg_pnl_percent
-       FROM trades WHERE status = 'CLOSED'
-       GROUP BY direction`
-    );
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    res.json(dirStats);
+    const dirStats = await Trade.aggregate([
+      { $match: { user_id: userId, status: 'closed' } },
+      {
+        $group: {
+          _id: '$side',
+          total_trades: { $sum: 1 },
+          wins: { $sum: { $cond: [{ $gt: ['$pnl', 0] }, 1, 0] } },
+          losses: { $sum: { $cond: [{ $lte: ['$pnl', 0] }, 1, 0] } },
+          total_pnl: { $sum: '$pnl' }
+        }
+      }
+    ]);
+
+    const formatted = dirStats.map(d => ({
+      side: d._id,
+      total_trades: d.total_trades,
+      wins: d.wins,
+      losses: d.losses,
+      win_rate: ((d.wins / d.total_trades) * 100).toFixed(2),
+      total_pnl: d.total_pnl.toFixed(2)
+    }));
+
+    res.json(formatted);
   } catch (error) {
     next(error);
   }
@@ -75,14 +104,49 @@ router.get('/direction', async (req, res, next) => {
 // GET /api/analytics/summary
 router.get('/summary', async (req, res, next) => {
   try {
-    // Genel özet
-    const [summary] = await db.execute(
-      `SELECT 
-        COUNT(*) as total_trades,
-        SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as total_wins,
-        SUM(CASE WHEN pnl <= 0 THEN 1 ELSE 0 END) as total_losses,
-        SUM(CASE WHEN close_reason = 'TP' THEN 1 ELSE 0 END) as total_tp,
-        SUM(CASE WHEN close_reason = 'SL' THEN 1 ELSE 0 END) as total_sl,
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const summary = await Trade.aggregate([
+      { $match: { user_id: userId, status: 'closed' } },
+      {
+        $group: {
+          _id: null,
+          total_trades: { $sum: 1 },
+          total_wins: { $sum: { $cond: [{ $gt: ['$pnl', 0] }, 1, 0] } },
+          total_losses: { $sum: { $cond: [{ $lte: ['$pnl', 0] }, 1, 0] } },
+          total_pnl: { $sum: '$pnl' },
+          avg_pnl: { $avg: '$pnl' }
+        }
+      }
+    ]);
+
+    if (summary.length === 0) {
+      return res.json({
+        total_trades: 0,
+        total_wins: 0,
+        total_losses: 0,
+        win_rate: 0,
+        total_pnl: 0,
+        avg_pnl: 0
+      });
+    }
+
+    const data = summary[0];
+    res.json({
+      total_trades: data.total_trades,
+      total_wins: data.total_wins,
+      total_losses: data.total_losses,
+      win_rate: ((data.total_wins / data.total_trades) * 100).toFixed(2),
+      total_pnl: data.total_pnl.toFixed(2),
+      avg_pnl: data.avg_pnl.toFixed(2)
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+module.exports = router;
         SUM(pnl) as total_pnl,
         AVG(pnl_percent) as avg_pnl_percent,
         MAX(pnl) as best_trade,

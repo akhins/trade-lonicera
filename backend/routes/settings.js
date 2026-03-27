@@ -1,20 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database');
+const Settings = require('../models/Settings');
+const User = require('../models/User');
 
 // GET /api/settings
 router.get('/', async (req, res, next) => {
   try {
-    const [settings] = await db.execute('SELECT * FROM settings ORDER BY setting_key');
-    const config = {};
-    settings.forEach(s => {
-      config[s.setting_key] = {
-        value: s.setting_value,
-        description: s.description,
-        updatedAt: s.updated_at
-      };
-    });
-    res.json(config);
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    let settings = await Settings.findOne({ user_id: userId }).lean();
+    
+    if (!settings) {
+      // Create default settings if doesn't exist
+      settings = new Settings({ user_id: userId });
+      await settings.save();
+    }
+
+    res.json(settings);
   } catch (error) {
     next(error);
   }
@@ -23,39 +26,51 @@ router.get('/', async (req, res, next) => {
 // PUT /api/settings
 router.put('/', async (req, res, next) => {
   try {
-    const updates = req.body;
-    
-    for (const [key, value] of Object.entries(updates)) {
-      await db.execute(
-        `INSERT INTO settings (setting_key, setting_value, updated_at) 
-         VALUES (?, ?, NOW())
-         ON DUPLICATE KEY UPDATE setting_value = ?, updated_at = NOW()`,
-        [key, String(value), String(value)]
-      );
-    }
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    res.json({ success: true, message: 'Ayarlar güncellendi' });
+    const settings = await Settings.findOneAndUpdate(
+      { user_id: userId },
+      req.body,
+      { new: true, upsert: true }
+    );
+
+    res.json({ success: true, settings });
   } catch (error) {
     next(error);
   }
 });
 
-// PUT /api/settings/reset-balance
-router.put('/reset-balance', async (req, res, next) => {
+// GET /api/settings/user-profile
+router.get('/user-profile', async (req, res, next) => {
   try {
-    const { balance = 10000 } = req.body;
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    await db.execute(
-      `UPDATE settings SET setting_value = ?, updated_at = NOW() WHERE setting_key = 'paper_balance'`,
-      [String(balance)]
-    );
+    const user = await User.findById(userId).select('-password_hash').lean();
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-    await db.execute(
-      'INSERT INTO balance_history (balance, change_amount, change_reason) VALUES (?, 0, ?)',
-      [balance, 'Bakiye sıfırlandı']
-    );
+    res.json(user);
+  } catch (error) {
+    next(error);
+  }
+});
 
-    res.json({ success: true, balance });
+// PUT /api/settings/user-profile
+router.put('/user-profile', async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { email } = req.body;
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { email },
+      { new: true }
+    ).select('-password_hash');
+
+    res.json(user);
   } catch (error) {
     next(error);
   }
