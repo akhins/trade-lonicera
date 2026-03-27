@@ -1,46 +1,42 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database');
+const Trade = require('../models/Trade');
 const binanceService = require('../services/binanceService');
 
 // GET /api/trades/open
 router.get('/open', async (req, res, next) => {
   try {
-    const [trades] = await db.execute(
-      `SELECT t.* 
-       FROM trades t
-       WHERE t.status = 'OPEN' 
-       ORDER BY t.open_time DESC`
-    );
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    // Güncel fiyatları ekle
+    const trades = await Trade.find({ user_id: userId, status: 'open' })
+      .sort({ opened_at: -1 })
+      .lean();
+
     const enriched = trades.map(t => {
       const currentPrice = binanceService.getPrice(t.symbol);
-      const entryPrice = parseFloat(t.entry_price);
-      const quantity = parseFloat(t.quantity);
-      const stopLoss = parseFloat(t.stop_loss);
+      const entryPrice = t.entry_price;
+      const quantity = t.quantity;
+      const stopLoss = t.stop_loss;
       const riskAmount = quantity * Math.abs(entryPrice - stopLoss);
       const positionSizeUSD = quantity * entryPrice;
 
+      let pnl = t.pnl || 0;
+      let pnlPercent = t.pnl_percentage || 0;
+
       if (currentPrice) {
-        if (t.direction === 'LONG') {
-          pnlPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
-        } else {
-          pnlPercent = ((entryPrice - currentPrice) / entryPrice) * 100;
-        }
-        const valDiff = t.direction === 'LONG' ? (currentPrice - entryPrice) : (entryPrice - currentPrice);
+        const valDiff = t.side === 'LONG' 
+          ? (currentPrice - entryPrice) 
+          : (entryPrice - currentPrice);
         pnl = valDiff * quantity;
-      } else {
-        pnl = t.pnl || 0;
-        pnlPercent = t.pnl_percent || 0;
+        pnlPercent = ((valDiff / entryPrice) * 100).toFixed(2);
       }
 
       return {
         ...t,
-        opened_at: t.open_time,
-        position_size: positionSizeUSD, // Notional in USD
-        units: quantity,               // Quantity in coins
-        risk_amount: riskAmount,       // Calculated risk in USD
+        position_size: positionSizeUSD,
+        units: quantity,
+        risk_amount: riskAmount,
         current_price: currentPrice || entryPrice,
         unrealized_pnl: pnl,
         unrealized_pnl_percent: pnlPercent
@@ -56,31 +52,29 @@ router.get('/open', async (req, res, next) => {
 // GET /api/trades/history
 router.get('/history', async (req, res, next) => {
   try {
-    const { symbol, result_type, limit = 50, offset = 0 } = req.query;
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    let query = `SELECT * FROM trades WHERE status = 'CLOSED'`;
-    const params = [];
+    const { symbol, limit = 50, offset = 0 } = req.query;
 
-    if (symbol) { query += ' AND symbol = ?'; params.push(symbol); }
-    if (result_type) { query += ' AND close_reason = ?'; params.push(result_type); }
+    const query = { user_id: userId, status: 'closed' };
+    if (symbol) query.symbol = symbol;
 
-    query += ' ORDER BY close_time DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
+    const trades = await Trade.find(query)
+      .sort({ closed_at: -1 })
+      .limit(parseInt(limit))
+      .skip(parseInt(offset))
+      .lean();
 
-    const [trades] = await db.execute(query, params);
-    const [countResult] = await db.execute(
-      `SELECT COUNT(*) as total FROM trades WHERE status = 'CLOSED'`
-    );
+    const total = await Trade.countDocuments(query);
 
-    const formatted = trades.map(t => ({
-      ...t,
-      opened_at: t.open_time,
-      closed_at: t.close_time,
-      result_type: t.close_reason,
-      position_size: t.quantity
-    }));
-
-    res.json({ trades: formatted, total: countResult[0].total });
+    res.json({ 
+      trades: trades.map(t => ({
+        ...t,
+        position_size: t.quantity
+      })), 
+      total 
+    });
   } catch (error) {
     next(error);
   }
@@ -89,126 +83,163 @@ router.get('/history', async (req, res, next) => {
 // GET /api/trades/:id
 router.get('/:id', async (req, res, next) => {
   try {
-    const [trades] = await db.execute('SELECT * FROM trades WHERE id = ?', [req.params.id]);
-    if (trades.length === 0) return res.status(404).json({ error: 'Trade bulunamadı' });
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const trade = trades[0];
+    const trade = await Trade.findOne({ _id: req.params.id, user_id: userId }).lean();
+    if (!trade) return res.status(404).json({ error: 'Trade not found' });
+
     const currentPrice = binanceService.getPrice(trade.symbol);
 
     res.json({ 
       ...trade, 
-      opened_at: trade.open_time,
-      closed_at: trade.close_time,
-      result_type: trade.close_reason,
-      position_size: trade.quantity,
-      current_price: currentPrice 
+      current_price: currentPrice,
+      position_size: trade.quantity
     });
   } catch (error) {
     next(error);
   }
 });
 
-// GET /api/trades/chart/:symbol - TradingView chart verisi
-router.get('/chart/:symbol', async (req, res, next) => {
+// GET /api/trades/stats/:timeframe
+router.get('/stats/:timeframe', async (req, res, next) => {
   try {
-    const { interval = '15m', limit = 200 } = req.query;
-    const klines = await binanceService.fetchKlines(req.params.symbol, interval, parseInt(limit));
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    // Aynı sembol için trade'leri çek
-    const [trades] = await db.execute(
-      `SELECT * FROM trades WHERE symbol = ? ORDER BY open_time DESC LIMIT 20`,
-      [req.params.symbol]
+    const { timeframe = '24h' } = req.params;
+    
+    let dateFrom = new Date();
+    if (timeframe === '24h') dateFrom.setHours(dateFrom.getHours() - 24);
+    else if (timeframe === '7d') dateFrom.setDate(dateFrom.getDate() - 7);
+    else if (timeframe === '30d') dateFrom.setDate(dateFrom.getDate() - 30);
+
+    const stats = await Trade.aggregate([
+      {
+        $match: {
+          user_id: userId,
+          status: 'closed',
+          closed_at: { $gte: dateFrom }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total_trades: { $sum: 1 },
+          winning_trades: { $sum: { $cond: [{ $gt: ['$pnl', 0] }, 1, 0] } },
+          losing_trades: { $sum: { $cond: [{ $lt: ['$pnl', 0] }, 1, 0] } },
+          total_pnl: { $sum: '$pnl' },
+          avg_pnl: { $avg: '$pnl' },
+          max_win: { $max: '$pnl' },
+          max_loss: { $min: '$pnl' }
+        }
+      }
+    ]);
+
+    if (stats.length === 0) {
+      return res.json({
+        timeframe,
+        total_trades: 0,
+        winning_trades: 0,
+        losing_trades: 0,
+        win_rate: 0,
+        total_pnl: 0,
+        avg_pnl: 0
+      });
+    }
+
+    const data = stats[0];
+    res.json({
+      timeframe,
+      total_trades: data.total_trades,
+      winning_trades: data.winning_trades,
+      losing_trades: data.losing_trades,
+      win_rate: ((data.winning_trades / data.total_trades) * 100).toFixed(2),
+      total_pnl: parseFloat(data.total_pnl.toFixed(2)),
+      avg_pnl: parseFloat(data.avg_pnl.toFixed(2)),
+      max_win: parseFloat(data.max_win.toFixed(2)),
+      max_loss: parseFloat(data.max_loss.toFixed(2))
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/trades - Create mock trade (for testing)
+router.post('/', async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const { symbol, side, entry_price, quantity, stop_loss, take_profit } = req.body;
+
+    if (!symbol || !side || !entry_price || !quantity || !stop_loss || !take_profit) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const trade = new Trade({
+      user_id: userId,
+      symbol: symbol.toUpperCase(),
+      side: side.toUpperCase(),
+      entry_price,
+      quantity,
+      stop_loss,
+      take_profit,
+      status: 'open'
+    });
+
+    await trade.save();
+    res.status(201).json(trade);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /api/trades/:id - Update trade
+router.put('/:id', async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const trade = await Trade.findOneAndUpdate(
+      { _id: req.params.id, user_id: userId },
+      req.body,
+      { new: true }
     );
 
-    res.json({ klines, trades, signals: trades }); // Sinyal yerine trade veriyoruz
+    if (!trade) return res.status(404).json({ error: 'Trade not found' });
+    res.json(trade);
   } catch (error) {
     next(error);
   }
 });
 
-// POST /api/trades/manual - Manuel işlem aç (test amaçlı)
-router.post('/manual', async (req, res, next) => {
+// POST /api/trades/:id/close - Close a trade
+router.post('/:id/close', async (req, res, next) => {
   try {
-    const { symbol, direction = 'LONG', leverage = 5 } = req.body;
-    
-    if (!symbol) {
-      return res.status(400).json({ error: 'Parite (symbol) gerekli' });
-    }
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    // Binance'den güncel fiyat çek
-    const currentPrice = await binanceService.fetchPrice(symbol);
-    if (!currentPrice) {
-      return res.status(400).json({ error: `${symbol} fiyatı alınamadı` });
-    }
+    const { exit_price } = req.body;
+    if (!exit_price) return res.status(400).json({ error: 'exit_price required' });
 
-    // SL ve TP'yi %2 ve %6 olarak hesapla (1:3 RR)
-    const stopLossPercent = 0.02;
-    const takeProfitPercent = 0.06;
-    
-    let stopLoss, takeProfit;
-    if (direction === 'LONG') {
-      stopLoss = currentPrice * (1 - stopLossPercent);
-      takeProfit = currentPrice * (1 + takeProfitPercent);
-    } else {
-      stopLoss = currentPrice * (1 + stopLossPercent);
-      takeProfit = currentPrice * (1 - takeProfitPercent);
-    }
+    const trade = await Trade.findOne({ _id: req.params.id, user_id: userId });
+    if (!trade) return res.status(404).json({ error: 'Trade not found' });
 
-    // Sinyal objesi oluştur
-    const signal = {
-      symbol,
-      direction,
-      entryPrice: currentPrice,
-      stopLoss,
-      takeProfit,
-      riskRewardRatio: 3,
-      leverage,
-      signalReason: `Manual test işlem: ${direction} @ ${currentPrice}`,
-      indicatorValues: JSON.stringify({ manual: true })
-    };
+    const pnl = trade.side === 'LONG'
+      ? (exit_price - trade.entry_price) * trade.quantity
+      : (trade.entry_price - exit_price) * trade.quantity;
 
-    // Trade motorunu çağır
-    const tradeEngine = require('../services/tradeEngine');
-    const opened = await tradeEngine.openTrade(signal);
+    const pnl_percentage = ((pnl / (trade.entry_price * trade.quantity)) * 100).toFixed(2);
 
-    if (!opened) {
-      return res.status(400).json({ error: 'İşlem açılamadı (zaten açık trade veya limit aşıldı)' });
-    }
+    trade.exit_price = exit_price;
+    trade.pnl = pnl;
+    trade.pnl_percentage = pnl_percentage;
+    trade.status = 'closed';
+    trade.closed_at = new Date();
 
-    res.json({ 
-      success: true, 
-      message: `${direction} işlem açıldı: ${symbol}`,
-      trade: {
-        symbol,
-        direction,
-        entry_price: currentPrice,
-        stop_loss: stopLoss,
-        take_profit: takeProfit,
-        leverage,
-        notional: `${(250 * leverage).toFixed(2)} USDT`
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// POST /api/trades/close-all - Tüm açık işlemleri kapat
-router.post('/close-all', async (req, res, next) => {
-  try {
-    const tradeEngine = require('../services/tradeEngine');
-    const count = tradeEngine.getOpenTrades().length;
-    
-    if (count === 0) {
-      return res.json({ success: true, message: 'Kapatılacak açık işlem yok.' });
-    }
-
-    await tradeEngine.closeAllTrades();
-
-    res.json({ 
-      success: true, 
-      message: `Tüm işlemler (${count} adet) başarıyla kapatıldı.` 
-    });
+    await trade.save();
+    res.json(trade);
   } catch (error) {
     next(error);
   }
