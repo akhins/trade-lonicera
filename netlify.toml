@@ -1,7 +1,8 @@
 [build]
-  command = "cd frontend && npm install && npm run build"
-  functions = "functions"
-  publish = "frontend/dist"
+  base = "frontend"
+  command = "npm install && npm run build"
+  functions = "netlify/functions"
+  publish = "dist"
 
 [[redirects]]
   from = "/*"
@@ -12,13 +13,13 @@
 # VITE_API_URL = https://your-backend-api.com
 
 [context.production]
-  command = "cd frontend && npm install && npm run build"
-  publish = "frontend/dist"
+  command = "npm install && npm run build"
+  publish = "dist"
 
 [context.deploy-preview]
-  command = "cd frontend && npm install && npm run build"
-  publish = "frontend/dist"
+  command = "npm install && npm run build"
+  publish = "dist"
 
 [context.branch-deploy]
-  command = "cd frontend && npm install && npm run build"
-  publish = "frontend/dist"
+  command = "npm install && npm run build"
+  publish = "dist"
