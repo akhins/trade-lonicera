@@ -496,6 +496,20 @@ GET /api/system/logs            # Sistem logları
 
 ---
 
+## 🌐 Production Deployment
+
+Uygulamayı üretim ortamına (production) dağıtmak için:
+
+👉 **[Deployment Guide](DEPLOYMENT.md)** - Adım adım Netlify ve Backend deployment rehberi
+
+Kısa özet:
+1. **Frontend** → Netlify (Otomatik build & deploy)
+2. **Backend** → Railway / Heroku / VPS
+3. **Veritabanı** → AWS RDS / DigitalOcean Managed DB
+4. **Environment Variables** → Netlify & Backend Dashboard
+
+---
+
 ## 📞 Destek ve Katkısı
 
 Sorun buldum? Özellik önerisi var mı?
