@@ -1,0 +1,24 @@
+[build]
+  command = "cd frontend && npm install && npm run build"
+  functions = "functions"
+  publish = "frontend/dist"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Environment variables (Netlify UI'dan set edilecek)
+# VITE_API_URL = https://your-backend-api.com
+
+[context.production]
+  command = "cd frontend && npm install && npm run build"
+  publish = "frontend/dist"
+
+[context.deploy-preview]
+  command = "cd frontend && npm install && npm run build"
+  publish = "frontend/dist"
+
+[context.branch-deploy]
+  command = "cd frontend && npm install && npm run build"
+  publish = "frontend/dist"

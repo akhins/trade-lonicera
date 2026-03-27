@@ -1,9 +1,38 @@
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
+// API Base URL - Development vs Production
+const getApiBaseURL = () => {
+  // Netlify environment variable
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // Development
+  if (import.meta.env.DEV) {
+    return 'http://localhost:3001/api';
+  }
+  
+  // Production - Same origin
+  return `${window.location.origin}/api`;
+};
+
+// Socket.IO URL
+const getSocketURL = () => {
+  if (import.meta.env.VITE_SOCKET_URL) {
+    return import.meta.env.VITE_SOCKET_URL;
+  }
+  
+  if (import.meta.env.DEV) {
+    return 'http://localhost:3001';
+  }
+  
+  return window.location.origin;
+};
+
 // Axios instance
 const api = axios.create({
-  baseURL: 'http://localhost:3001/api',
+  baseURL: getApiBaseURL(),
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' }
 });
@@ -53,17 +82,15 @@ let socket = null;
 
 export function getSocket() {
   if (!socket) {
-    // Dynamic URL - use current origin for production
-    const socketUrl = process.env.NODE_ENV === 'production' 
-      ? window.location.origin 
-      : (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
+    const socketUrl = getSocketURL();
     
     socket = io(socketUrl, {
       autoConnect: false,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 10,
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      path: '/socket.io/'
     });
   }
   return socket;
