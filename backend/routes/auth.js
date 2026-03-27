@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const db = require('../config/database');
+const User = require('../models/User');
+const Settings = require('../models/Settings');
 
 // POST /api/auth/login
 router.post('/login', async (req, res, next) => {
@@ -13,22 +13,18 @@ router.post('/login', async (req, res, next) => {
       return res.status(400).json({ error: 'Kullanıcı adı ve şifre gerekli' });
     }
 
-    const [users] = await db.execute('SELECT * FROM users WHERE username = ?', [username]);
-    if (users.length === 0) {
+    const user = await User.findOne({ username });
+    if (!user) {
       return res.status(401).json({ error: 'Geçersiz kullanıcı adı veya şifre' });
     }
 
-    const user = users[0];
-    const isMatch = await bcrypt.compare(password, user.password_hash);
+    const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({ error: 'Geçersiz kullanıcı adı veya şifre' });
     }
 
-    // Son login güncelle
-    await db.execute('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
-
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
+      { id: user._id, username: user.username },
       process.env.JWT_SECRET || 'default-secret',
       { expiresIn: '24h' }
     );
@@ -36,10 +32,9 @@ router.post('/login', async (req, res, next) => {
     res.json({
       token,
       user: {
-        id: user.id,
+        id: user._id,
         username: user.username,
-        email: user.email,
-        role: user.role
+        email: user.email
       }
     });
   } catch (error) {
@@ -50,12 +45,61 @@ router.post('/login', async (req, res, next) => {
 // GET /api/auth/me
 router.get('/me', require('../middleware/auth'), async (req, res, next) => {
   try {
-    const [users] = await db.execute(
-      'SELECT id, username, email, role, last_login FROM users WHERE id = ?',
-      [req.user.id]
+    const user = await User.findById(req.user.id).select('-password_hash');
+    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    
+    res.json({
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      created_at: user.created_at
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/auth/register
+router.post('/register', async (req, res, next) => {
+  try {
+    const { username, email, password } = req.body;
+
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Kullanıcı adı, email ve şifre gerekli' });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ $or: [{ username }, { email }] });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Kullanıcı adı veya email zaten kullanılıyor' });
+    }
+
+    // Create new user
+    const user = new User({
+      username,
+      email,
+      password_hash: password
+    });
+
+    await user.save();
+
+    // Create default settings for user
+    await Settings.create({ user_id: user._id });
+
+    const token = jwt.sign(
+      { id: user._id, username: user.username },
+      process.env.JWT_SECRET || 'default-secret',
+      { expiresIn: '24h' }
     );
-    if (users.length === 0) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
-    res.json(users[0]);
+
+    res.status(201).json({
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email
+      }
+    });
   } catch (error) {
     next(error);
   }

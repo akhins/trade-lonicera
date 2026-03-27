@@ -10,6 +10,7 @@ const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
 
+const { connectDB } = require('./config/database');
 const errorHandler = require('./middleware/errorHandler');
 const authMiddleware = require('./middleware/auth');
 const Logger = require('./utils/logger');
@@ -144,12 +145,24 @@ async function initializeServices() {
 
 // Start server
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, async () => {
-  console.log(`\n🌐 Server çalışıyor: http://localhost:${PORT}`);
-  console.log(`📡 WebSocket aktif`);
-  console.log('');
-  await initializeServices();
-});
+
+// Initialize database and start server
+(async () => {
+  try {
+    // Connect to MongoDB
+    await connectDB();
+    
+    server.listen(PORT, async () => {
+      console.log(`\n🌐 Server çalışıyor: http://localhost:${PORT}`);
+      console.log(`📡 WebSocket aktif`);
+      console.log('');
+      await initializeServices();
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+})();
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
