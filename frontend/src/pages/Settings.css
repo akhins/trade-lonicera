@@ -1,45 +1,56 @@
 .settings-groups {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-lg);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 1.5rem;
+}
+
+@media (max-width: 600px) {
+  .settings-groups {
+    grid-template-columns: 1fr;
+  }
 }
 
 .settings-items {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
 }
 
 .setting-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
-  border-radius: var(--radius-sm);
-  transition: background var(--transition-fast);
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
 }
 
 .setting-row:hover {
-  background: rgba(99, 102, 241, 0.04);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-secondary);
 }
 
 .setting-info label {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.9rem;
   display: block;
+  color: var(--text-primary);
+  margin-bottom: 2px;
 }
 
 .setting-desc {
-  font-size: 0.78rem;
-  color: var(--text-muted);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
 }
 
 /* Toggle Switch */
 .toggle-switch {
   position: relative;
   display: inline-block;
-  width: 44px;
-  height: 24px;
+  width: 48px;
+  height: 26px;
 }
 
 .toggle-switch input {
@@ -51,14 +62,11 @@
 .toggle-slider {
   position: absolute;
   cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-secondary);
   border-radius: var(--radius-full);
-  transition: all var(--transition-fast);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .toggle-slider::before {
@@ -66,19 +74,37 @@
   position: absolute;
   height: 18px;
   width: 18px;
-  left: 2px;
-  bottom: 2px;
+  left: 3px;
+  bottom: 3px;
   background: var(--text-secondary);
   border-radius: 50%;
-  transition: all var(--transition-fast);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .toggle-switch input:checked + .toggle-slider {
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
+  background: var(--color-success-bg);
+  border-color: var(--color-success);
 }
 
 .toggle-switch input:checked + .toggle-slider::before {
-  transform: translateX(20px);
-  background: white;
+  transform: translateX(22px);
+  background: var(--color-success);
+  box-shadow: 0 0 10px var(--color-success-glow);
+}
+
+.input-field {
+  background: var(--bg-input);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-glow);
 }

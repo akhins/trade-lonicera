@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/client';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  PieChart, Pie, Cell, AreaChart, Area
+} from 'recharts';
+import { 
+  TrendingUp, TrendingDown, Target, BarChart3, PieChart as PieIcon, 
+  Layers, Clock, Zap, ArrowUpRight, ArrowDownRight, Award
+} from 'lucide-react';
+import { motion } from 'framer-motion';
 import './Analytics.css';
+
+const COLORS = ['#58a6ff', '#bc8cff', '#3fb950', '#f85149', '#d29922', '#388bfd'];
 
 export default function Analytics() {
   const [summary, setSummary] = useState(null);
@@ -33,158 +44,177 @@ export default function Analytics() {
 
   if (loading) return <div className="loading-spinner"><div className="spinner"></div></div>;
 
-  const formatUSD = (v) => '$' + (parseFloat(v) || 0).toFixed(2);
+  const formatUSD = (v) => '$' + (parseFloat(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
+  const formatPercent = (v) => (parseFloat(v) || 0).toFixed(1) + '%';
   const s = summary || {};
 
+  // Chart Data preparation
+  const winLossData = [
+    { name: 'Wins', value: s.total_wins || 0 },
+    { name: 'Losses', value: s.total_losses || 0 }
+  ];
+
+  const symbolChartData = symbolStats.slice(0, 8).map(sym => ({
+    name: sym.symbol.replace('USDT', ''),
+    pnl: parseFloat(sym.total_pnl)
+  }));
+
+  const perfChartData = dailyPerf.map(p => ({
+    date: new Date(p.date).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+    pnl: parseFloat(p.daily_pnl)
+  }));
+
+  // Advanced Metrics
+  const profitFactor = s.total_losses_val !== 0 ? (Math.abs(s.total_wins_val || 0) / Math.abs(s.total_losses_val || 1)).toFixed(2) : '∞';
+  const expectancy = s.total_trades > 0 ? (parseFloat(s.total_pnl) / s.total_trades).toFixed(2) : '0.00';
+
   return (
-    <div className="analytics-page animate-fade-in">
+    <div className="analytics-page">
       <div className="page-header">
-        <h1>Analitik & Raporlar</h1>
-        <p>Detaylı performans analizi</p>
+        <h1>Performans Analitiği</h1>
+        <p>Hesap büyümesi ve trading verimliliği raporu</p>
       </div>
 
-      {/* Summary Stats */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-label">Toplam İşlem</div>
-          <div className="stat-value mono">{s.total_trades || 0}</div>
-          <div className="stat-change" style={{ color: 'var(--text-secondary)' }}>
-            ✅ {s.total_wins || 0} Win | ❌ {s.total_losses || 0} Loss
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Win Rate</div>
-          <div className="stat-value mono pnl-positive">
-            {s.total_trades > 0 ? ((s.total_wins / s.total_trades) * 100).toFixed(1) : 0}%
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Toplam PnL</div>
-          <div className={`stat-value mono ${parseFloat(s.total_pnl) >= 0 ? 'pnl-positive' : 'pnl-negative'}`}>
+      {/* Hero Metrics */}
+      <div className="metrics-summary">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 }} className="metric-item">
+          <div className="metric-label">Toplam PnL</div>
+          <div className={`metric-value ${parseFloat(s.total_pnl) >= 0 ? 'pnl-positive' : 'pnl-negative'}`}>
             {formatUSD(s.total_pnl)}
           </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Ortalama PnL %</div>
-          <div className={`stat-value mono ${parseFloat(s.avg_pnl_percent) >= 0 ? 'pnl-positive' : 'pnl-negative'}`}>
-            {(parseFloat(s.avg_pnl_percent) || 0).toFixed(2)}%
+          <div className="metric-sub" style={{ color: 'var(--text-tertiary)' }}>
+            Growth: {formatPercent(s.totalPnlPercent)}
           </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Max Drawdown</div>
-          <div className="stat-value mono pnl-negative">{(s.maxDrawdown || 0).toFixed(2)}%</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Avg Risk/Reward</div>
-          <div className="stat-value mono">{(parseFloat(s.avg_risk_reward) || 0).toFixed(2)}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">En İyi Seri</div>
-          <div className="stat-value mono pnl-positive">🔥 {s.bestStreak || 0}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">En Kötü Seri</div>
-          <div className="stat-value mono pnl-negative">💀 {s.worstStreak || 0}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Toplam TP</div>
-          <div className="stat-value mono pnl-positive">{s.total_tp || 0}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Toplam SL</div>
-          <div className="stat-value mono pnl-negative">{s.total_sl || 0}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">En İyi Trade</div>
-          <div className="stat-value mono pnl-positive">{formatUSD(s.best_trade)}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">En Kötü Trade</div>
-          <div className="stat-value mono pnl-negative">{formatUSD(s.worst_trade)}</div>
-        </div>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }} className="metric-item">
+          <div className="metric-label">Win Rate</div>
+          <div className="metric-value pnl-positive">
+            {s.total_trades > 0 ? ((s.total_wins / s.total_trades) * 100).toFixed(1) : 0}%
+          </div>
+          <div className="metric-sub" style={{ color: 'var(--text-tertiary)' }}>
+            {s.total_wins} Win / {s.total_losses} Loss
+          </div>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }} className="metric-item">
+          <div className="metric-label">Profit Factor</div>
+          <div className="metric-value" style={{ color: parseFloat(profitFactor) > 1 ? 'var(--color-success)' : 'var(--color-warning)' }}>
+            {profitFactor}
+          </div>
+          <div className="metric-sub" style={{ color: 'var(--text-tertiary)' }}>
+            Efficiency Ratio
+          </div>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4 }} className="metric-item">
+          <div className="metric-label">Expectancy</div>
+          <div className="metric-value" style={{ color: parseFloat(expectancy) > 0 ? 'var(--color-success)' : 'var(--color-warning)' }}>
+            ${expectancy}
+          </div>
+          <div className="metric-sub" style={{ color: 'var(--text-tertiary)' }}>
+            Per Trade Avg
+          </div>
+        </motion.div>
       </div>
 
-      {/* Direction Stats */}
-      <div className="two-column" style={{ marginBottom: 'var(--spacing-xl)' }}>
-        <div className="glass-card">
-          <h3 style={{ marginBottom: 'var(--spacing-md)', fontSize: '1rem', fontWeight: 700 }}>📊 Long / Short Performansı</h3>
-          {dirStats.length === 0 ? (
-            <div className="empty-state"><p>Yeterli veri yok</p></div>
-          ) : (
-            <table className="premium-table">
-              <thead>
-                <tr><th>Yön</th><th>İşlem</th><th>Win</th><th>Loss</th><th>Win Rate</th><th>PnL</th></tr>
-              </thead>
-              <tbody>
-                {dirStats.map(d => (
-                  <tr key={d.direction}>
-                    <td><span className={`badge badge-${d.direction.toLowerCase()}`}>{d.direction}</span></td>
-                    <td className="mono">{d.total_trades}</td>
-                    <td className="mono pnl-positive">{d.wins}</td>
-                    <td className="mono pnl-negative">{d.losses}</td>
-                    <td className="mono">{d.win_rate}%</td>
-                    <td className={`mono ${parseFloat(d.total_pnl) >= 0 ? 'pnl-positive' : 'pnl-negative'}`}>{formatUSD(d.total_pnl)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="glass-card">
-          <h3 style={{ marginBottom: 'var(--spacing-md)', fontSize: '1rem', fontWeight: 700 }}>🎯 TP Kırılımı</h3>
-          {(!s.tpBreakdown || s.tpBreakdown.length === 0) ? (
-            <div className="empty-state"><p>Yeterli veri yok</p></div>
-          ) : (
-            <table className="premium-table">
-              <thead>
-                <tr><th>Tip</th><th>Sayı</th><th>Toplam PnL</th></tr>
-              </thead>
-              <tbody>
-                {(s.tpBreakdown || []).map(tp => (
-                  <tr key={tp.result_type}>
-                    <td className="mono" style={{ fontWeight: 600 }}>{tp.result_type}</td>
-                    <td className="mono">{tp.count}</td>
-                    <td className="mono pnl-positive">{formatUSD(tp.total_pnl)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-
-      {/* Symbol Performance */}
-      <div className="glass-card">
-        <h3 style={{ marginBottom: 'var(--spacing-md)', fontSize: '1rem', fontWeight: 700 }}>🪙 Sembol Bazlı Performans</h3>
-        {symbolStats.length === 0 ? (
-          <div className="empty-state"><div className="empty-icon">📊</div><p>Yeterli veri yok</p></div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="premium-table">
-              <thead>
-                <tr><th>Sembol</th><th>İşlem</th><th>Win</th><th>Loss</th><th>PnL</th><th>Avg PnL %</th><th>En İyi</th><th>En Kötü</th><th>Ort. Süre</th></tr>
-              </thead>
-              <tbody>
-                {symbolStats.map(sym => (
-                  <tr key={sym.symbol}>
-                    <td className="mono" style={{ fontWeight: 600 }}>{sym.symbol}</td>
-                    <td className="mono">{sym.total_trades}</td>
-                    <td className="mono pnl-positive">{sym.wins}</td>
-                    <td className="mono pnl-negative">{sym.losses}</td>
-                    <td className={`mono ${parseFloat(sym.total_pnl) >= 0 ? 'pnl-positive' : 'pnl-negative'}`} style={{ fontWeight: 600 }}>
-                      {formatUSD(sym.total_pnl)}
-                    </td>
-                    <td className="mono">{(parseFloat(sym.avg_pnl_percent) || 0).toFixed(2)}%</td>
-                    <td className="mono pnl-positive">{formatUSD(sym.best_trade)}</td>
-                    <td className="mono pnl-negative">{formatUSD(sym.worst_trade)}</td>
-                    <td className="mono">{Math.round(sym.avg_duration_min || 0)}dk</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="analytics-grid">
+        {/* Cumulative PnL Chart */}
+        <div className="chart-card">
+          <div className="chart-title"><TrendingUp size={18} /> Kümülatif Performans</div>
+          <div className="chart-box">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={perfChartData}>
+                <defs>
+                  <linearGradient id="pnlGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis hide={true} domain={['auto', 'auto']} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-primary)', borderRadius: '8px' }}
+                />
+                <Area type="monotone" dataKey="pnl" stroke="var(--accent-primary)" fillOpacity={1} fill="url(#pnlGradient)" strokeWidth={3} />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
-        )}
+        </div>
+
+        {/* Win/Loss Pie */}
+        <div className="chart-card">
+          <div className="chart-title"><PieIcon size={18} /> Win / Loss Dağılımı</div>
+          <div className="chart-box">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={winLossData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={8}
+                  dataKey="value"
+                >
+                  <Cell fill="var(--color-success)" />
+                  <Cell fill="var(--color-danger)" />
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-primary)', borderRadius: '8px' }}
+                />
+                <Legend iconType="circle" />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Symbol Performance Bar */}
+        <div className="chart-card">
+          <div className="chart-title"><Zap size={18} /> En Karlı Semboller</div>
+          <div className="chart-box">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={symbolChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} />
+                <Tooltip 
+                  cursor={{fill: 'rgba(255,255,255,0.05)'}}
+                  contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-primary)', borderRadius: '8px' }}
+                />
+                <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
+                  {symbolChartData.map((entry, index) => (
+                    <Cell key={index} fill={entry.pnl >= 0 ? 'var(--color-success)' : 'var(--color-danger)'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Advanced Metrics Grid */}
+        <div className="chart-card">
+          <div className="chart-title"><Award size={18} /> İşlem İstatistikleri</div>
+          <div className="status-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            <div className="glass-card" style={{ padding: '1rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>En İyi Seri</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-success)' }}>🔥 {s.bestStreak || 0}</div>
+            </div>
+            <div className="glass-card" style={{ padding: '1rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Max Drawdown</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-danger)' }}>{(s.maxDrawdown || 0).toFixed(2)}%</div>
+            </div>
+            <div className="glass-card" style={{ padding: '1rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Avg Risk/Reward</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>{(parseFloat(s.avg_risk_reward) || 0).toFixed(2)}</div>
+            </div>
+            <div className="glass-card" style={{ padding: '1rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Ortalam İşlem Süresi</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>{Math.round(s.avg_duration_min || 0)} dk</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

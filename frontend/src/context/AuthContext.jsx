@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -20,13 +21,23 @@ export function AuthProvider({ children }) {
   }, [token]);
 
   const login = async (username, password) => {
-    const res = await api.post('/auth/login', { username, password });
-    const { token: newToken, user: userData } = res.data;
-    localStorage.setItem('token', newToken);
-    localStorage.setItem('user', JSON.stringify(userData));
-    setToken(newToken);
-    setUser(userData);
-    return userData;
+    // Prevent concurrent login attempts
+    if (isLoggingIn) {
+      throw new Error('Login already in progress');
+    }
+
+    try {
+      setIsLoggingIn(true);
+      const res = await api.post('/auth/login', { username, password });
+      const { token: newToken, user: userData } = res.data;
+      localStorage.setItem('token', newToken);
+      localStorage.setItem('user', JSON.stringify(userData));
+      setToken(newToken);
+      setUser(userData);
+      return userData;
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   const logout = () => {
@@ -37,7 +48,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{ user, token, login, logout, loading, isAuthenticated: !!token, isLoggingIn }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,16 +1,26 @@
-import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { 
+  LayoutDashboard, 
+  Zap, 
+  Radio, 
+  TrendingUp, 
+  History, 
+  BarChart3, 
+  Settings as SettingsIcon, 
+  Terminal,
+  LogOut
+} from 'lucide-react';
 import './Sidebar.css';
 
 const navItems = [
-  { path: '/', icon: '📊', label: 'Dashboard' },
-  { path: '/signals', icon: '📡', label: 'Sinyaller' },
-  { path: '/open-trades', icon: '📈', label: 'Açık İşlemler' },
-  { path: '/trade-history', icon: '📋', label: 'İşlem Geçmişi' },
-  { path: '/analytics', icon: '📉', label: 'Analitik' },
-  { path: '/settings', icon: '⚙️', label: 'Ayarlar' },
-  { path: '/system-logs', icon: '🔧', label: 'Sistem Logları' }
+  { path: '/', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
+  { path: '/signals', icon: <Radio size={20} />, label: 'Sinyaller' },
+  { path: '/open-trades', icon: <TrendingUp size={20} />, label: 'Açık İşlemler' },
+  { path: '/trade-history', icon: <History size={20} />, label: 'İşlem Geçmişi' },
+  { path: '/analytics', icon: <BarChart3 size={20} />, label: 'Analitik' },
+  { path: '/settings', icon: <SettingsIcon size={20} />, label: 'Ayarlar' },
+  { path: '/system-logs', icon: <Terminal size={20} />, label: 'Sistem Logları' }
 ];
 
 export default function Sidebar() {
@@ -49,7 +59,7 @@ export default function Sidebar() {
           <span>Paper Trading</span>
         </div>
         <button className="nav-item logout-btn" onClick={logout}>
-          <span className="nav-icon">🚪</span>
+          <span className="nav-icon"><LogOut size={20} /></span>
           <span className="nav-label">Çıkış Yap</span>
         </button>
       </div>

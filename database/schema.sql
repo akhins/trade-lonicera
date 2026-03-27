@@ -48,6 +48,38 @@ CREATE TABLE IF NOT EXISTS users (
   PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- --------------------------------------------------------
+-- Trades tablosu - Demo trading işlemleri için
+-- --------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS trades (
+  id int(11) NOT NULL AUTO_INCREMENT,
+  symbol varchar(20) NOT NULL,
+  direction enum('LONG','SHORT') NOT NULL,
+  entry_price decimal(20,8) NOT NULL,
+  stop_loss decimal(20,8) NOT NULL,
+  take_profit decimal(20,8) NOT NULL,
+  risk_reward_ratio decimal(5,2) NOT NULL DEFAULT 3.00,
+  quantity decimal(20,8) NOT NULL DEFAULT 0,
+  leverage int(11) NOT NULL DEFAULT 1,
+  status enum('OPEN','CLOSED','CANCELLED') NOT NULL DEFAULT 'OPEN',
+  pnl decimal(20,8) DEFAULT 0,
+  pnl_percent decimal(10,4) DEFAULT 0,
+  open_time datetime NOT NULL DEFAULT current_timestamp(),
+  close_time datetime DEFAULT NULL,
+  close_reason enum('TP','SL','MANUAL') DEFAULT NULL,
+  signal_reason text,
+  indicator_values json,
+  created_at datetime NOT NULL DEFAULT current_timestamp(),
+  updated_at datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (id),
+  INDEX idx_symbol (symbol),
+  INDEX idx_status (status),
+  INDEX idx_open_time (open_time),
+  INDEX idx_direction (direction),
+  INDEX idx_close_reason (close_reason)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- Varsayılan admin kullanıcı (şifre: admin123)
 INSERT IGNORE INTO users (username, email, password_hash, role) VALUES
 ('admin', 'admin@sametabi.trade', '$2a$10$xVqYLGEuG4jQFTKsLhJEruWXr7lQwBdGhS1vCZJmJxnnqf2DRO3Hy', 'admin');
@@ -183,7 +215,8 @@ CREATE TABLE IF NOT EXISTS settings (
   setting_value text NOT NULL,
   description varchar(255) DEFAULT NULL,
   updated_at datetime DEFAULT NULL ON UPDATE current_timestamp(),
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  INDEX idx_setting_key (setting_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Varsayılan ayarlar

@@ -1,5 +1,9 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // Bypass local SSL/antivirus certificate issues for Binance fetch
+// NOTE: NODE_TLS_REJECT_UNAUTHORIZED=0 is only for development/testing
+// DO NOT use in production - use proper SSL certificates instead
+if (process.env.NODE_ENV !== 'production') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
 
 const express = require('express');
 const http = require('http');
@@ -15,21 +19,35 @@ const binanceService = require('./services/binanceService');
 const telegramService = require('./services/telegramService');
 const strategyEngine = require('./services/strategyEngine');
 const paperTradingEngine = require('./services/paperTradingEngine');
+const tradingSystem = require('./services/tradingSystem');
 
 const app = express();
 const server = http.createServer(app);
 
-// Socket.IO
+// Socket.IO - Dynamic CORS configuration
+const getCorsOrigins = () => {
+  if (process.env.NODE_ENV === 'production') {
+    // Production: use environment variable or default domain
+    return process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : ['https://yourdomain.com'];
+  }
+  // Development: allow localhost on different ports
+  return ['http://localhost:3001', 'http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:5173'];
+};
+
+const corsOrigins = getCorsOrigins();
+
 const io = new Server(server, {
   cors: {
-    origin: ['http://localhost:5173', 'http://localhost:3000'],
-    methods: ['GET', 'POST']
-  }
+    origin: corsOrigins,
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  transports: ['websocket', 'polling']
 });
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  origin: corsOrigins,
   credentials: true
 }));
 app.use(express.json());
@@ -109,7 +127,16 @@ async function initializeServices() {
     }
   })();
 
-  await Promise.all([p1, p2, p3]);
+  const p4 = (async () => {
+    try {
+      console.log('🤖 Demo Trading Sistemi başlatılıyor...');
+      await tradingSystem.initialize();
+    } catch (err) {
+      console.error('⚠️ Demo Trading Sistemi hatası:', err.message);
+    }
+  })();
+
+  await Promise.all([p1, p2, p3, p4]);
 
   console.log('\n✅ Servis başlatma serisi tamamlandı!\n');
   await Logger.info('System', 'Servis başlatma denemeleri tamamlandı');
@@ -129,8 +156,15 @@ process.on('SIGINT', async () => {
   console.log('\n🛑 Sistem kapatılıyor...');
   binanceService.stopPriceUpdates();
   strategyEngine.stop();
+  paperTradingEngine.stop();
   await telegramService.stop();
+  await tradingSystem.stop();
   process.exit(0);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('💀 Uncaught Exception:', err);
+  process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {

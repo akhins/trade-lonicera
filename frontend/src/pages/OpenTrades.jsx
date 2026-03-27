@@ -5,6 +5,8 @@ import { connectSocket } from '../api/client';
 export default function OpenTrades() {
   const [trades, setTrades] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [symbolInput, setSymbolInput] = useState('RIVERUSDT');
+  const [manualLoading, setManualLoading] = useState(false);
 
   const fetchTrades = async () => {
     try {
@@ -12,6 +14,43 @@ export default function OpenTrades() {
       setTrades(res.data);
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleManualTrade = async (direction) => {
+    setManualLoading(true);
+    try {
+      const res = await api.post('/trades/manual', {
+        symbol: symbolInput,
+        direction,
+        leverage: 5
+      });
+      alert(`✅ İşlem açıldı!\n${JSON.stringify(res.data.trade, null, 2)}`);
+      setSymbolInput('RIVERUSDT');
+      fetchTrades();
+    } catch (err) {
+      alert(`❌ Hata: ${err.response?.data?.error || err.message}`);
+    } finally {
+      setManualLoading(false);
+    }
+  };
+
+  const handleCloseAll = async () => {
+    if (trades.length === 0) return;
+    
+    if (!window.confirm(`⚠️ DİKKAT: ${trades.length} adet açık işlemin tamamı piyasa fiyatından kapatılacak. Onaylıyor musunuz?`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await api.post('/trades/close-all');
+      alert('✅ Tüm işlemler başarıyla kapatıldı.');
+      fetchTrades();
+    } catch (err) {
+      alert(`❌ Hata: ${err.response?.data?.error || err.message}`);
     } finally {
       setLoading(false);
     }
@@ -42,9 +81,107 @@ export default function OpenTrades() {
 
   return (
     <div className="animate-fade-in">
-      <div className="page-header">
-        <h1>Açık İşlemler</h1>
-        <p>{trades.length} aktif paper trade</p>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1>Açık İşlemler</h1>
+          <p>{trades.length} aktif paper trade</p>
+        </div>
+        {trades.length > 0 && (
+          <button 
+            onClick={handleCloseAll}
+            style={{
+              padding: '10px 20px',
+              background: 'rgba(255, 68, 68, 0.15)',
+              color: '#ff4444',
+              border: '1px solid rgba(255, 68, 68, 0.3)',
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255, 68, 68, 0.25)'}
+            onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255, 68, 68, 0.15)'}
+          >
+            🛑 Tüm İşlemleri Kapat
+          </button>
+        )}
+      </div>
+
+      {/* Manual Trade Form */}
+      <div className="glass-card" style={{ padding: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)' }}>
+        <h3 style={{ marginBottom: 'var(--spacing-md)' }}>🧪 Manual Test İşlem</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto auto', gap: 'var(--spacing-md)', alignItems: 'flex-end' }}>
+          <div>
+            <label style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>Parite</label>
+            <input 
+              type="text" 
+              value={symbolInput} 
+              onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
+              placeholder="RIVERUSDT"
+              style={{
+                width: '100%',
+                padding: '8px',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid var(--border-primary)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.9rem'
+              }}
+              disabled={manualLoading}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>Parametre</label>
+            <div style={{ padding: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem' }}>
+              5x Kaldıraç • $250 Notional
+            </div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <label style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', display: 'block', marginBottom: 4 }}>Risk/Reward</label>
+            <div style={{ padding: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-sm)', fontSize: '0.85rem' }}>
+              1:3 (SL 2% / TP 6%)
+            </div>
+          </div>
+          <button 
+            onClick={() => handleManualTrade('LONG')}
+            disabled={manualLoading}
+            style={{
+              padding: '8px 16px',
+              background: 'var(--color-success)',
+              color: 'white',
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              cursor: manualLoading ? 'not-allowed' : 'pointer',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              opacity: manualLoading ? 0.5 : 1
+            }}
+          >
+            {manualLoading ? '...' : '📈 LONG'}
+          </button>
+          <button 
+            onClick={() => handleManualTrade('SHORT')}
+            disabled={manualLoading}
+            style={{
+              padding: '8px 16px',
+              background: 'var(--color-danger)',
+              color: 'white',
+              border: 'none',
+              borderRadius: 'var(--radius-sm)',
+              cursor: manualLoading ? 'not-allowed' : 'pointer',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              opacity: manualLoading ? 0.5 : 1
+            }}
+          >
+            {manualLoading ? '...' : '📉 SHORT'}
+          </button>
+        </div>
       </div>
 
       {trades.length === 0 ? (
@@ -72,9 +209,13 @@ export default function OpenTrades() {
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Pozisyon</div>
-                  <div className="mono" style={{ fontSize: '0.9rem' }}>{formatUSD(trade.position_size)}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Risk: {formatUSD(trade.risk_amount)}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Büyüklük (Notional)</div>
+                  <div className="mono" style={{ fontSize: '0.9rem', fontWeight: 600 }}>{formatUSD(trade.position_size)}</div>
+                  <div className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{parseFloat(trade.units).toFixed(2)} {trade.symbol.replace('USDT', '')}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Risk (USD)</div>
+                  <div className="mono" style={{ fontSize: '0.9rem', color: 'var(--color-danger)' }}>{formatUSD(trade.risk_amount)}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Gerçekleşmemiş PnL</div>

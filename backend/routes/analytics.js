@@ -9,16 +9,16 @@ router.get('/performance', async (req, res, next) => {
 
     // Günlük performans
     const [daily] = await db.execute(
-      `SELECT DATE(closed_at) as date,
+      `SELECT DATE(close_time) as date,
               COUNT(*) as trade_count,
               SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as wins,
               SUM(CASE WHEN pnl <= 0 THEN 1 ELSE 0 END) as losses,
               SUM(pnl) as total_pnl,
               AVG(pnl) as avg_pnl,
               AVG(pnl_percent) as avg_pnl_percent
-       FROM paper_trades 
-       WHERE status = 'CLOSED' AND closed_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-       GROUP BY DATE(closed_at) ORDER BY date ASC`,
+       FROM trades 
+       WHERE status = 'CLOSED' AND close_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+       GROUP BY DATE(close_time) ORDER BY date ASC`,
       [parseInt(period)]
     );
 
@@ -40,8 +40,8 @@ router.get('/symbols', async (req, res, next) => {
               AVG(pnl_percent) as avg_pnl_percent,
               MAX(pnl) as best_trade,
               MIN(pnl) as worst_trade,
-              AVG(TIMESTAMPDIFF(MINUTE, opened_at, closed_at)) as avg_duration_min
-       FROM paper_trades WHERE status = 'CLOSED'
+              AVG(TIMESTAMPDIFF(MINUTE, open_time, close_time)) as avg_duration_min
+       FROM trades WHERE status = 'CLOSED'
        GROUP BY symbol ORDER BY total_pnl DESC`
     );
 
@@ -62,7 +62,7 @@ router.get('/direction', async (req, res, next) => {
               ROUND(SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) / COUNT(*) * 100, 2) as win_rate,
               SUM(pnl) as total_pnl,
               AVG(pnl_percent) as avg_pnl_percent
-       FROM paper_trades WHERE status = 'CLOSED'
+       FROM trades WHERE status = 'CLOSED'
        GROUP BY direction`
     );
 
@@ -81,15 +81,15 @@ router.get('/summary', async (req, res, next) => {
         COUNT(*) as total_trades,
         SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) as total_wins,
         SUM(CASE WHEN pnl <= 0 THEN 1 ELSE 0 END) as total_losses,
-        SUM(CASE WHEN result_type LIKE 'TP%' THEN 1 ELSE 0 END) as total_tp,
-        SUM(CASE WHEN result_type = 'SL' THEN 1 ELSE 0 END) as total_sl,
+        SUM(CASE WHEN close_reason = 'TP' THEN 1 ELSE 0 END) as total_tp,
+        SUM(CASE WHEN close_reason = 'SL' THEN 1 ELSE 0 END) as total_sl,
         SUM(pnl) as total_pnl,
         AVG(pnl_percent) as avg_pnl_percent,
         MAX(pnl) as best_trade,
         MIN(pnl) as worst_trade,
-        AVG(TIMESTAMPDIFF(MINUTE, opened_at, closed_at)) as avg_trade_duration,
-        AVG(ABS(reward_amount / NULLIF(risk_amount, 0))) as avg_risk_reward
-       FROM paper_trades WHERE status = 'CLOSED'`
+        AVG(TIMESTAMPDIFF(MINUTE, open_time, close_time)) as avg_trade_duration,
+        AVG(risk_reward_ratio) as avg_risk_reward
+       FROM trades WHERE status = 'CLOSED'`
     );
 
     // Max Drawdown hesapla
@@ -108,7 +108,7 @@ router.get('/summary', async (req, res, next) => {
 
     // Win/Loss serileri
     const [trades] = await db.execute(
-      `SELECT pnl FROM paper_trades WHERE status = 'CLOSED' ORDER BY closed_at ASC`
+      `SELECT pnl FROM trades WHERE status = 'CLOSED' ORDER BY close_time ASC`
     );
 
     let currentWin = 0, currentLoss = 0, bestStreak = 0, worstStreak = 0;
@@ -126,9 +126,9 @@ router.get('/summary', async (req, res, next) => {
 
     // TP kırılımı
     const [tpBreakdown] = await db.execute(
-      `SELECT result_type, COUNT(*) as count, SUM(pnl) as total_pnl
-       FROM paper_trades WHERE status = 'CLOSED' AND result_type LIKE 'TP%'
-       GROUP BY result_type`
+      `SELECT close_reason as result_type, COUNT(*) as count, SUM(pnl) as total_pnl
+       FROM trades WHERE status = 'CLOSED' AND close_reason = 'TP'
+       GROUP BY close_reason`
     );
 
     res.json({

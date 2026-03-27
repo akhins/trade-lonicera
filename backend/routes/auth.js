@@ -48,7 +48,7 @@ router.post('/login', async (req, res, next) => {
 });
 
 // GET /api/auth/me
-router.get('/me', require('../middleware/auth'), async (req, res) => {
+router.get('/me', require('../middleware/auth'), async (req, res, next) => {
   try {
     const [users] = await db.execute(
       'SELECT id, username, email, role, last_login FROM users WHERE id = ?',
@@ -57,7 +57,7 @@ router.get('/me', require('../middleware/auth'), async (req, res) => {
     if (users.length === 0) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
     res.json(users[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 });
 

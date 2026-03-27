@@ -368,6 +368,15 @@ class PaperTradingEngine {
   getOpenTrades() {
     return Array.from(this.openTrades.values());
   }
+
+  /**
+   * Engine'i durdurur
+   */
+  stop() {
+    // Engine doesn't have any intervals to clean up
+    // But we keep this method for consistency with other engines
+    Logger.info('PaperTrading', 'Paper Trading Engine durduruldu');
+  }
 }
 
 module.exports = new PaperTradingEngine();

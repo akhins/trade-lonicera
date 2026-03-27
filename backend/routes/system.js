@@ -5,6 +5,7 @@ const binanceService = require('../services/binanceService');
 const telegramService = require('../services/telegramService');
 const strategyEngine = require('../services/strategyEngine');
 const paperTradingEngine = require('../services/paperTradingEngine');
+const tradingSystem = require('../services/tradingSystem');
 
 // GET /api/system/status
 router.get('/status', async (req, res, next) => {
@@ -21,6 +22,7 @@ router.get('/status', async (req, res, next) => {
       database: { connected: dbStatus },
       strategy: strategyEngine.getStatus(),
       paperTrading: paperTradingEngine.getStatus(),
+      tradingSystem: tradingSystem.getStatus(),
       uptime: process.uptime(),
       memory: process.memoryUsage()
     });

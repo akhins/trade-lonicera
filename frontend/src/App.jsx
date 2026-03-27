@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import Sidebar from './components/Layout/Sidebar';
 import Header from './components/Layout/Header';
 import Login from './pages/Login';
@@ -11,6 +12,9 @@ import TradeHistory from './pages/TradeHistory';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import SystemLogs from './pages/SystemLogs';
+import TickerBar from './components/Layout/TickerBar';
+import { motion, AnimatePresence } from 'framer-motion';
+import { connectSocket } from './api/client';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -21,10 +25,21 @@ function ProtectedRoute({ children }) {
 function AppLayout({ children }) {
   return (
     <div className="app-layout">
+      <TickerBar />
       <Sidebar />
       <div className="main-content">
         <Header />
-        {children}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={window.location.pathname}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+          >
+            {children}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -54,10 +69,31 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppInitializer />
+          <AppRoutes />
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
+}
+
+// Component to initialize socket connection
+function AppInitializer() {
+  const { isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Connect to WebSocket when user is authenticated
+      try {
+        connectSocket();
+      } catch (err) {
+        console.warn('Failed to connect to WebSocket:', err.message);
+      }
+    }
+  }, [isAuthenticated]);
+
+  return null;
 }
