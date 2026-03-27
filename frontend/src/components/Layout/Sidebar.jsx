@@ -9,6 +9,7 @@ import {
   BarChart3, 
   Settings as SettingsIcon, 
   Terminal,
+  Brain,
   LogOut
 } from 'lucide-react';
 import './Sidebar.css';
@@ -19,6 +20,7 @@ const navItems = [
   { path: '/open-trades', icon: <TrendingUp size={20} />, label: 'Açık İşlemler' },
   { path: '/trade-history', icon: <History size={20} />, label: 'İşlem Geçmişi' },
   { path: '/analytics', icon: <BarChart3 size={20} />, label: 'Analitik' },
+  { path: '/strategies', icon: <Brain size={20} />, label: 'Stratejiler' },
   { path: '/settings', icon: <SettingsIcon size={20} />, label: 'Ayarlar' },
   { path: '/system-logs', icon: <Terminal size={20} />, label: 'Sistem Logları' }
 ];

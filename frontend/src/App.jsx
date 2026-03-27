@@ -12,6 +12,7 @@ import TradeHistory from './pages/TradeHistory';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import SystemLogs from './pages/SystemLogs';
+import Strategies from './pages/Strategies';
 import TickerBar from './components/Layout/TickerBar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { connectSocket } from './api/client';
@@ -60,6 +61,7 @@ function AppRoutes() {
       <Route path="/open-trades" element={<ProtectedRoute><AppLayout><OpenTrades /></AppLayout></ProtectedRoute>} />
       <Route path="/trade-history" element={<ProtectedRoute><AppLayout><TradeHistory /></AppLayout></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><AppLayout><Analytics /></AppLayout></ProtectedRoute>} />
+      <Route path="/strategies" element={<ProtectedRoute><AppLayout><Strategies /></AppLayout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
       <Route path="/system-logs" element={<ProtectedRoute><AppLayout><SystemLogs /></AppLayout></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" />} />
